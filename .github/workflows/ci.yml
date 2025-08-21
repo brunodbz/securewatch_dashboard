@@ -1,0 +1,53 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Testes e Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Configurar Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Instalar dependências
+      run: npm ci
+    
+    - name: Executar linting
+      run: npm run lint --if-present
+    
+    - name: Executar testes
+      run: npm test --if-present
+    
+    - name: Construir aplicação
+      run: npm run build
+
+  build-docker:
+    name: Construir Imagem Docker
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Construir imagem Docker
+      run: docker build -t securewatch-dashboard:latest .
+    
+    - name: Testar execução do container
+      run: |
+        docker run -d -p 3000:80 --name test-container securewatch-dashboard:latest
+        sleep 10
+        curl -f http://localhost:3000 || exit 1
+        docker stop test-container
+        docker rm test-container
